@@ -1,0 +1,308 @@
+{
+  "info": {
+    "name": "Fraud Scoring Decision Service",
+    "description": "Postman collection for local testing of the real-time fraud scoring and decision service.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "transactionId",
+      "value": "tx-postman-001"
+    },
+    {
+      "key": "customerId",
+      "value": "customer-postman-001"
+    },
+    {
+      "key": "merchantId",
+      "value": "merchant-postman-001"
+    },
+    {
+      "key": "correlationId",
+      "value": "postman-correlation-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Seed Redis/PostgreSQL Features",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"merchantId\": \"{{merchantId}}\",\n  \"averageAmount\": 80.00,\n  \"chargebackRate\": 0.015,\n  \"highRiskCountry\": false,\n  \"accountAgeDays\": 360,\n  \"velocity24h\": 3,\n  \"priorDeclines24h\": 0,\n  \"source\": \"REDIS\",\n  \"refreshedAt\": \"2026-07-04T10:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/features",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "features"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Score Transaction - Cached Features",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('decision recorded', function () { pm.response.to.have.status(201); });",
+              "const json = pm.response.json();",
+              "pm.test('model version is stored', function () { pm.expect(json.modelVersion).to.be.a('string').and.not.empty; });",
+              "pm.test('has explainability reasons', function () { pm.expect(json.reasons.length).to.be.above(0); });",
+              "pm.test('new request is not idempotent replay', function () { pm.expect(json.idempotentReplay).to.eql(false); });",
+              "pm.test('under 100ms in local fast path', function () { pm.expect(json.decisionTimeMs).to.be.below(100); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"merchantId\": \"{{merchantId}}\",\n  \"amount\": 400.00,\n  \"currency\": \"PLN\",\n  \"country\": \"PL\",\n  \"channel\": \"ECOMMERCE\",\n  \"deviceId\": \"device-postman-001\",\n  \"ipAddress\": \"203.0.113.20\",\n  \"occurredAt\": \"2026-07-04T10:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retry Same Transaction - Consistent Decision",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-Correlation-Id",
+            "value": "{{correlationId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"merchantId\": \"{{merchantId}}\",\n  \"amount\": 400.00,\n  \"currency\": \"PLN\",\n  \"country\": \"PL\",\n  \"channel\": \"ECOMMERCE\",\n  \"deviceId\": \"device-postman-001\",\n  \"ipAddress\": \"203.0.113.20\",\n  \"occurredAt\": \"2026-07-04T10:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('retry accepted', function () { pm.response.to.have.status(201); });",
+              "const json = pm.response.json();",
+              "pm.test('retry returns idempotent replay', function () { pm.expect(json.idempotentReplay).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Get Recorded Decision",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions/{{transactionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions",
+            "{{transactionId}}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Conflict - Same Transaction Different Payload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"{{transactionId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"merchantId\": \"{{merchantId}}\",\n  \"amount\": 401.00,\n  \"currency\": \"PLN\",\n  \"country\": \"PL\",\n  \"channel\": \"ECOMMERCE\",\n  \"deviceId\": \"device-postman-001\",\n  \"ipAddress\": \"203.0.113.20\",\n  \"occurredAt\": \"2026-07-04T10:00:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('conflict rejected', function () { pm.response.to.have.status(409); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Score Transaction - Fallback Features",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"tx-postman-fallback-001\",\n  \"customerId\": \"missing-customer\",\n  \"merchantId\": \"missing-merchant\",\n  \"amount\": 25.00,\n  \"currency\": \"PLN\",\n  \"country\": \"PL\",\n  \"channel\": \"ECOMMERCE\",\n  \"deviceId\": \"device-postman-002\",\n  \"ipAddress\": \"203.0.113.21\",\n  \"occurredAt\": \"2026-07-04T10:05:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('fallback decision recorded', function () { pm.response.to.have.status(201); });",
+              "const json = pm.response.json();",
+              "pm.test('fallback source used', function () { pm.expect(json.featureSource).to.eql('FALLBACK'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Validation - Invalid Currency And Country",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('invalid request rejected', function () { pm.response.to.have.status(400); });"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"tx-postman-invalid-001\",\n  \"customerId\": \"customer-postman-invalid\",\n  \"merchantId\": \"merchant-postman-invalid\",\n  \"amount\": 25.00,\n  \"currency\": \"pln\",\n  \"country\": \"POL\",\n  \"channel\": \"ECOMMERCE\",\n  \"deviceId\": \"device-postman-invalid\",\n  \"ipAddress\": \"203.0.113.23\",\n  \"occurredAt\": \"2026-07-04T10:06:00Z\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fraud/decisions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "fraud",
+            "decisions"
+          ]
+        }
+      }
+    }
+  ]
+}
