@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: fraud-scoring-decision-service
+  main:
+    banner-mode: console
+  r2dbc:
+    url: ${SPRING_R2DBC_URL:r2dbc:postgresql://localhost:5432/frauddb}
+    username: ${SPRING_R2DBC_USERNAME:fraud}
+    password: ${SPRING_R2DBC_PASSWORD:fraud}
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 40
+      max-idle-time: 30m
+  flyway:
+    enabled: true
+    url: ${SPRING_FLYWAY_URL:jdbc:postgresql://localhost:5432/frauddb}
+    user: ${SPRING_FLYWAY_USER:fraud}
+    password: ${SPRING_FLYWAY_PASSWORD:fraud}
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 75ms
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+fraud:
+  cache:
+    fallback-average-amount: 100.00
+    fallback-account-age-days: 90
+    operation-timeout: 40ms
+    ttl: 20m
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    client-id: fraud-scoring-service
+    decision-topic: fraud.decision.made
+    enabled: ${FRAUD_KAFKA_ENABLED:true}
+    enrichment-topic: fraud.enrichment.requested
+    outbox-max-attempts: 10
+    outbox-poll-delay: 500ms
+    outbox-poll-limit: 50
+    outbox-processing-ttl: 2m
+    outbox-publish-concurrency: 8
+  scoring:
+    model-version: rules-2026-07-04
+    chargeback-weight: 30
+    decline-threshold: 80
+    high-risk-countries: RU,BY,IR,KP,SY
+    high-risk-country-weight: 25
+    prior-decline-weight: 5
+    review-threshold: 55
+    velocity-threshold-24h: 8
+    velocity-weight: 22
+    unusual-amount-multiplier: 4.0
+    unusual-amount-weight: 28
